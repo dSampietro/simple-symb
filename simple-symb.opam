@@ -5,6 +5,7 @@ description:
   "Symbolic interpreter for a simple imperative language written using Soteria."
 maintainer: ["Francesco Borri"]
 authors: ["Francesco Borri"]
+license: "GPL-3.0"
 homepage: "https://github.com/francescoborri/simple-symb"
 bug-reports: "https://github.com/francescoborri/simple-symb/issues"
 depends: [
