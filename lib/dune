@@ -1,0 +1,14 @@
+(ocamllex
+ (modules simpleLexer))
+
+(menhir
+ (modules simpleParser))
+
+(library
+ (name simpleLib)
+ (modules simpleLib simpleAST simpleLexer simpleParser simpleSymbInterpreter)
+ (modules_without_implementation simpleAST)
+ (libraries soteria)
+ (preprocess
+  (pps soteria.ppx))
+ (flags :standard -open Soteria.Logs.Import))
