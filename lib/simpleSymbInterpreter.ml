@@ -93,7 +93,7 @@ let rec symb_eval_stmt state = function
       else
         Symex.Result.error
           {
-            msg = Fmt.str "Assertion failed: %a" Typed.ppa cond;
+            msg = Fmt.str "Assertion %a failed" Typed.ppa cond;
             hist = state.hist;
           }
   | Invoke (f, aexpr) ->
