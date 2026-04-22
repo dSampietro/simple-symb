@@ -10,7 +10,7 @@
 %token AND OR NOT
 %token EQ NEQ LT LE GT GE
 %token SKIP ASSIGN SEQ IF THEN ELSE WHILE DO
-%token ASSUME ASSERT
+%token ASSUME ASSERT INVOKE
 %token LPAREN RPAREN LBRACE RBRACE EOF
 
 %start <stmt> prog
@@ -58,12 +58,13 @@ block:
   | atom_stmt = atom_stmt { atom_stmt }
   | LBRACE ; stmt = stmt ; RBRACE { stmt }
 
-
 atom_stmt:
   | SKIP ; SEQ { Skip }
   | x = ID ; ASSIGN ; aexpr = aexpr ; SEQ { Assign (x, aexpr) }
   | ASSUME ; bexpr = bexpr ; SEQ { Assume (bexpr) }
   | ASSERT ; bexpr = bexpr ; SEQ { Assert (bexpr) }
+  | INVOKE ; f = ID ; LPAREN ; aexpr = aexpr ; RPAREN ; SEQ { Invoke (f, aexpr) }
+  | x = ID ; ASSIGN ; INVOKE ; f = ID ; LPAREN ; aexpr = aexpr ; RPAREN ; SEQ { AssignInvoke (x, f, aexpr) }
 
 structured_stmt:
   | IF ; bexpr = bexpr ; THEN ; block1 = block ; ELSE ; block2 = block { If (bexpr, block1, block2) }

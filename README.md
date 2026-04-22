@@ -23,5 +23,5 @@ dune build
 - Run the symbolic interpreter on a sample program
 
 ```bash
-dune exec -- simple_symb test/examples/division_by_zero.t
+dune exec -- simple_symb test/examples/division_by_zero.example
 ```

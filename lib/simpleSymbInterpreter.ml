@@ -7,7 +7,15 @@ open Symex.Syntax
 open Typed.Infix
 open Typed.Syntax
 
-type env = Typed.T.sint Typed.t Map.t
+type symb_int = Typed.T.sint Typed.t
+type env = symb_int Map.t
+type hist = (string * symb_int) list
+type ok_state = { env : env; hist : hist }
+type err_state = { msg : string; hist : hist }
+
+let wrap_error result hist =
+  let*- err_msg = result in
+  Symex.Result.error { msg = err_msg; hist }
 
 let rec symb_eval_aexpr env = function
   | Int n -> Symex.Result.ok (Typed.int n)
@@ -29,7 +37,7 @@ let rec symb_eval_aexpr env = function
           if%sat Typed.not (v2 ==@ 0s) then
             let v2 = Typed.cast v2 in
             Symex.Result.ok (v1 /@ v2)
-          else Symex.Result.ok (Typed.int 0))
+          else Symex.Result.error "Division by zero")
 
 and symb_eval_bexpr env = function
   | Bool b -> Symex.Result.ok (Typed.of_bool b)
@@ -53,31 +61,57 @@ and symb_eval_bexpr env = function
       | Gt -> Symex.Result.ok (v1 >@ v2)
       | Ge -> Symex.Result.ok (v1 >=@ v2))
 
-let rec symb_eval_stmt env = function
-  | Skip -> Symex.Result.ok env
+let rec symb_eval_stmt state = function
+  | Skip -> Symex.Result.ok state
   | Assign (x, aexpr) ->
-      let** v = symb_eval_aexpr env aexpr in
-      Symex.Result.ok (Map.add x v env)
+      let++ v = wrap_error (symb_eval_aexpr state.env aexpr) state.hist in
+      { state with env = Map.add x v state.env }
   | Seq (stmt1, stmt2) ->
-      let** env = symb_eval_stmt env stmt1 in
-      symb_eval_stmt env stmt2
-  | If (bexpr, then_stmt, else_stmt) ->
-      let** cond = symb_eval_bexpr env bexpr in
-      if%sat cond then symb_eval_stmt env then_stmt
-      else symb_eval_stmt env else_stmt
+      let** state = symb_eval_stmt state stmt1 in
+      symb_eval_stmt state stmt2
+  | If (cond_bexpr, then_stmt, else_stmt) ->
+      let** cond =
+        wrap_error (symb_eval_bexpr state.env cond_bexpr) state.hist
+      in
+      if%sat cond then symb_eval_stmt state then_stmt
+      else symb_eval_stmt state else_stmt
   | While (bexpr, stmt) ->
-      let** cond = symb_eval_bexpr env bexpr in
+      let** cond = wrap_error (symb_eval_bexpr state.env bexpr) state.hist in
       if%sat cond then
-        let** env = symb_eval_stmt env stmt in
-        symb_eval_stmt env (While (bexpr, stmt))
-      else Symex.Result.ok env
+        let** state = symb_eval_stmt state stmt in
+        symb_eval_stmt state (While (bexpr, stmt))
+      else Symex.Result.ok state
   | Assume bexpr ->
-      let** cond = symb_eval_bexpr env bexpr in
+      let** cond = wrap_error (symb_eval_bexpr state.env bexpr) state.hist in
       let* () = Symex.assume [ cond ] in
-      Symex.Result.ok env
+      Symex.Result.ok state
   | Assert bexpr ->
-      let** cond = symb_eval_bexpr env bexpr in
+      let** cond = wrap_error (symb_eval_bexpr state.env bexpr) state.hist in
       (* In OX mode, result = true iff not cond is UNSAT *)
       let* result = Symex.assert_ cond in
-      if result then Symex.Result.ok env
-      else Symex.Result.error (Fmt.str "Assertion failed: %a" Typed.ppa cond)
+      if result then Symex.Result.ok state
+      else
+        Symex.Result.error
+          {
+            msg = Fmt.str "Assertion failed: %a" Typed.ppa cond;
+            hist = state.hist;
+          }
+  | Invoke (f, aexpr) ->
+      let++ arg = wrap_error (symb_eval_aexpr state.env aexpr) state.hist in
+      { state with hist = (f, arg) :: state.hist }
+  | AssignInvoke (x, f, aexpr) ->
+      let** arg = wrap_error (symb_eval_aexpr state.env aexpr) state.hist in
+      let* v = Symex.nondet Typed.t_int in
+      Symex.Result.ok
+        { env = Map.add x v state.env; hist = (f, arg) :: state.hist }
+
+let build_symb_process stmt =
+  let result =
+    let++ { env; hist } = symb_eval_stmt { env = Map.empty; hist = [] } stmt in
+    { env; hist = List.rev hist }
+  in
+  let result =
+    let+- { msg; hist } = result in
+    { msg; hist = List.rev hist }
+  in
+  result

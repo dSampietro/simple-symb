@@ -36,6 +36,7 @@ rule read = parse
   | "do" { DO }
   | "assume" { ASSUME }
   | "assert" { ASSERT }
+  | "invoke" { INVOKE }
   | '(' { LPAREN }
   | ')' { RPAREN }
   | '{' { LBRACE }
